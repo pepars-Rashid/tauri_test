@@ -1,15 +1,21 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use sea_orm::Database;
-use sea_orm_migration::MigratorTrait;
 use tauri::Manager;
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod bindings;
+mod commands;
+mod error;
+
+use crate::bindings::specta_builder;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let builder = specta_builder();
+
+    #[cfg(debug_assertions)]
+    builder
+        .export(specta_typescript::Typescript::default(), "../src/bindings.ts")
+        .expect("failed to export TS bindings");
+
     tauri::Builder::default()
         .setup(|app| {
             let app_dir = app.path().app_data_dir().expect("no app data dir");
@@ -19,14 +25,12 @@ pub fn run() {
 
             tauri::async_runtime::block_on(async {
                 let db = Database::connect(&db_url).await.expect("DB connect failed");
-                // Run your migrations here
-                // migrator::Migrator::up(&db, None).await.expect("Migration failed");
                 app.manage(db);
             });
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
